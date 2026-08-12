@@ -22,7 +22,7 @@ jobs:
       - name: Update release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/update-release
+        run: ./update-release
       - name: Verify
         run: |
           nix flake check --no-build
@@ -33,6 +33,6 @@ jobs:
             git config user.name github-actions[bot]
             git config user.email 41898282+github-actions[bot]@users.noreply.github.com
             git add package.nix
-            git commit -m "chore: update indexion"
+            git commit -m "chore: update indexion to v$(sed -nE 's/^  version = "([^"]+)";/\1/p' package.nix)"
             git push
           }
