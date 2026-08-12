@@ -1,4 +1,6 @@
 {
+  autoPatchelfHook,
+  glibc,
   lib,
   makeWrapper,
   stdenvNoCC,
@@ -27,7 +29,11 @@ stdenvNoCC.mkDerivation {
     sha256 = release.hash;
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [
+    makeWrapper
+  ]
+  ++ lib.optional stdenvNoCC.hostPlatform.isLinux autoPatchelfHook;
+  buildInputs = lib.optional stdenvNoCC.hostPlatform.isLinux glibc;
   unpackPhase = "tar -xzf $src";
   sourceRoot = "indexion-${if stdenvNoCC.hostPlatform.isDarwin then "darwin-arm64" else "linux-x64"}";
 

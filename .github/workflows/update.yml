@@ -33,14 +33,15 @@ jobs:
           darwin_hash=$(nix store prefetch-file --json "$darwin_url" | jq --raw-output .hash)
           linux_hash=$(nix store prefetch-file --json "$linux_url" | jq --raw-output .hash)
           VERSION=$version DARWIN_HASH=$darwin_hash LINUX_HASH=$linux_hash perl -0pi -e '
-            s/version = "[^"]+";/version = "$ENV{VERSION}";/;
-            s{(aarch64-darwin = \{\n\s+archive = "indexion-darwin-arm64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{DARWIN_HASH}.$2}e;
-            s{(x86_64-linux = \{\n\s+archive = "indexion-linux-x64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{LINUX_HASH}.$2}e;
+            die "could not update version\n" unless s/version = "[^"]+";/version = "$ENV{VERSION}";/;
+            die "could not update Darwin hash\n" unless s{(aarch64-darwin = \{\n\s+archive = "indexion-darwin-arm64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{DARWIN_HASH}.$2}e;
+            die "could not update Linux hash\n" unless s{(x86_64-linux = \{\n\s+archive = "indexion-linux-x64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{LINUX_HASH}.$2}e;
           ' package.nix
       - name: Verify
         run: |
           nix flake check --no-build
           nix build --no-link .#packages.x86_64-linux.default
+          nix run . -- --help >/dev/null
       - name: Commit update
         run: |
           git diff --quiet || {
