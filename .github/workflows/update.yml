@@ -20,6 +20,7 @@ jobs:
           mkdir -p "$HOME/.config/nix"
           echo "experimental-features = nix-command flakes" >> "$HOME/.config/nix/nix.conf"
       - name: Update release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -28,6 +29,11 @@ jobs:
             --header "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/trkbt10/indexion/releases/latest)
           version=$(jq --raw-output '.tag_name | ltrimstr("v")' <<<"$release")
+          if grep --quiet "version = \"$version\";" package.nix; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
           darwin_url=$(jq --raw-output '.assets[] | select(.name == "indexion-darwin-arm64.tar.gz") | .browser_download_url' <<<"$release")
           linux_url=$(jq --raw-output '.assets[] | select(.name == "indexion-linux-x64.tar.gz") | .browser_download_url' <<<"$release")
           darwin_hash=$(nix store prefetch-file --json "$darwin_url" | jq --raw-output .hash)
@@ -38,11 +44,13 @@ jobs:
             die "could not update Linux hash\n" unless s{(x86_64-linux = \{\n\s+archive = "indexion-linux-x64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{LINUX_HASH}.$2}e;
           ' package.nix
       - name: Verify
+        if: steps.release.outputs.changed == 'true'
         run: |
           nix flake check --no-build
           nix build --no-link .#packages.x86_64-linux.default
           nix run . -- --help >/dev/null
       - name: Commit update
+        if: steps.release.outputs.changed == 'true'
         run: |
           git diff --quiet || {
             git config user.name github-actions[bot]
