@@ -1,9 +1,30 @@
 # indexion-nix
 
-Nix package for the official Indexion release binaries.
+Nix package for the official [indexion](https://github.com/trkbt10/indexion) release binaries.
+
+## Usage
+
+### Run
 
 ```sh
-nix run .
+nix run github:ph0ryn/indexion-nix -- --help
 ```
 
-Supported targets are macOS ARM64 and Linux x64.
+### Install
+
+```nix
+# flake.nix
+inputs.indexion-nix = {
+  url = "github:ph0ryn/indexion-nix";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+```nix
+{
+  nixpkgs.overlays = [ inputs.indexion-nix.overlays.default ];
+  environment.systemPackages = [ pkgs.indexion ];
+}
+```
+
+For Home Manager, use `home.packages = [ pkgs.indexion ];` instead.
