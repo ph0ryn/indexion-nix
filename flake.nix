@@ -13,6 +13,10 @@
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
+      overlays.default = final: prev: {
+        indexion = final.callPackage ./package.nix { };
+      };
+
       packages = forAllSystems (pkgs: {
         default = pkgs.callPackage ./package.nix { };
         indexion = pkgs.callPackage ./package.nix { };
