@@ -9,17 +9,13 @@ permissions:
   contents: write
 
 jobs:
-  update:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.release.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Nix
-        run: |
-          curl --fail --location https://nixos.org/nix/install | sh -s -- --no-daemon
-          echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
-          mkdir -p "$HOME/.config/nix"
-          echo "experimental-features = nix-command flakes" >> "$HOME/.config/nix/nix.conf"
-      - name: Update release
+      - name: Check release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,6 +30,28 @@ jobs:
             exit 0
           fi
           echo 'changed=true' >> "$GITHUB_OUTPUT"
+
+  update:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        run: |
+          curl --fail --location https://nixos.org/nix/install | sh -s -- --no-daemon
+          echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.config/nix"
+          echo "experimental-features = nix-command flakes" >> "$HOME/.config/nix/nix.conf"
+      - name: Update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=$(curl --fail --location --silent --show-error \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/trkbt10/indexion/releases/latest)
+          version=$(jq --raw-output '.tag_name | ltrimstr("v")' <<<"$release")
           darwin_url=$(jq --raw-output '.assets[] | select(.name == "indexion-darwin-arm64.tar.gz") | .browser_download_url' <<<"$release")
           linux_url=$(jq --raw-output '.assets[] | select(.name == "indexion-linux-x64.tar.gz") | .browser_download_url' <<<"$release")
           darwin_hash=$(nix store prefetch-file --json "$darwin_url" | jq --raw-output .hash)
@@ -44,13 +62,11 @@ jobs:
             die "could not update Linux hash\n" unless s{(x86_64-linux = \{\n\s+archive = "indexion-linux-x64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{LINUX_HASH}.$2}e;
           ' package.nix
       - name: Verify
-        if: steps.release.outputs.changed == 'true'
         run: |
           nix flake check --no-build
           nix build --no-link .#packages.x86_64-linux.default
           nix run . -- --help >/dev/null
       - name: Commit update
-        if: steps.release.outputs.changed == 'true'
         run: |
           git diff --quiet || {
             git config user.name github-actions[bot]
