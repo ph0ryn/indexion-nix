@@ -22,7 +22,21 @@ jobs:
       - name: Update release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./update-release
+        run: |
+          release=$(curl --fail --location --silent --show-error \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/trkbt10/indexion/releases/latest)
+          version=$(jq --raw-output '.tag_name | ltrimstr("v")' <<<"$release")
+          darwin_url=$(jq --raw-output '.assets[] | select(.name == "indexion-darwin-arm64.tar.gz") | .browser_download_url' <<<"$release")
+          linux_url=$(jq --raw-output '.assets[] | select(.name == "indexion-linux-x64.tar.gz") | .browser_download_url' <<<"$release")
+          darwin_hash=$(nix store prefetch-file --json "$darwin_url" | jq --raw-output .hash)
+          linux_hash=$(nix store prefetch-file --json "$linux_url" | jq --raw-output .hash)
+          VERSION=$version DARWIN_HASH=$darwin_hash LINUX_HASH=$linux_hash perl -0pi -e '
+            s/version = "[^"]+";/version = "$ENV{VERSION}";/;
+            s{(aarch64-darwin = \{\n\s+archive = "indexion-darwin-arm64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{DARWIN_HASH}.$2}e;
+            s{(x86_64-linux = \{\n\s+archive = "indexion-linux-x64\.tar\.gz";\n\s+hash = ")[^"]+(";)}{$1.$ENV{LINUX_HASH}.$2}e;
+          ' package.nix
       - name: Verify
         run: |
           nix flake check --no-build
