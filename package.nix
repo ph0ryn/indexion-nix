@@ -3,11 +3,16 @@
   glibc,
   lib,
   makeWrapper,
+  openssl,
   stdenvNoCC,
 }:
 
 let
   version = "0.18.0";
+  isLinux = stdenvNoCC.hostPlatform.isLinux;
+  linuxWrapperArgs = lib.optionalString isLinux "--prefix LD_LIBRARY_PATH : ${
+    lib.makeLibraryPath [ openssl ]
+  }";
   releases = {
     aarch64-darwin = {
       archive = "indexion-darwin-arm64.tar.gz";
@@ -32,8 +37,11 @@ stdenvNoCC.mkDerivation {
   nativeBuildInputs = [
     makeWrapper
   ]
-  ++ lib.optional stdenvNoCC.hostPlatform.isLinux autoPatchelfHook;
-  buildInputs = lib.optional stdenvNoCC.hostPlatform.isLinux glibc;
+  ++ lib.optional isLinux autoPatchelfHook;
+  buildInputs = lib.optionals isLinux [
+    glibc
+    openssl
+  ];
   unpackPhase = "tar -xzf $src";
   sourceRoot = "indexion-${if stdenvNoCC.hostPlatform.isDarwin then "darwin-arm64" else "linux-x64"}";
 
@@ -42,7 +50,12 @@ stdenvNoCC.mkDerivation {
     cp -R . $out/libexec/indexion
     mkdir -p $out/bin
     makeWrapper $out/libexec/indexion/indexion $out/bin/indexion \
-      --set INDEXION_KGFS_DIR $out/libexec/indexion/kgfs
+      --set INDEXION_KGFS_DIR $out/libexec/indexion/kgfs ${linuxWrapperArgs}
+  '';
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/indexion --help >/dev/null
   '';
 
   meta = {
